@@ -6,12 +6,16 @@ import { fetchAllPages, fromLocalInput, toLocalInput } from "@/lib/format";
 import type { Banner, BannerAction, Category, MediaItem, Page } from "@/lib/types";
 import { useConfirm, useToast } from "@/components/feedback";
 import { MediaPicker } from "@/components/media-picker";
+import { LocalizedFields } from "@/components/locale-tabs";
+import { emptyTranslations, translationsFromRows } from "@/lib/category-form";
+import type { LocaleCode } from "@/lib/i18n";
 import { Alert, Badge, Button, Empty, Field, Modal, PageHeader } from "@/components/ui";
 
 type Draft = {
   id?: string;
   title: string;
   subtitle: string;
+  copies: Record<LocaleCode, { name: string; description: string }>;
   actionType: BannerAction;
   actionValue: string;
   isActive: boolean;
@@ -25,6 +29,7 @@ type Draft = {
 const emptyDraft = (): Draft => ({
   title: "",
   subtitle: "",
+  copies: emptyTranslations(),
   actionType: "NONE",
   actionValue: "",
   isActive: true,
@@ -71,6 +76,7 @@ export default function BannersPage() {
       id: item.id,
       title: item.title,
       subtitle: item.subtitle ?? "",
+      copies: translationsFromRows(item.translations),
       actionType: item.actionType,
       actionValue: item.actionValue ?? "",
       isActive: item.isActive,
@@ -91,9 +97,15 @@ export default function BannersPage() {
       return;
     }
     setBusy(true);
+    const rows = (["ar", "tr", "en"] as const).flatMap((locale) => {
+      const title = draft.copies[locale].name.trim();
+      if (!title) return [];
+      return [{ locale, title, subtitle: draft.copies[locale].description.trim() || null }];
+    });
+    const english = rows.find((row) => row.locale === "en");
     const body: Record<string, unknown> = {
-      title: draft.title.trim(),
-      subtitle: draft.subtitle.trim() || null,
+      title: english?.title || rows[0]?.title || draft.title.trim(),
+      subtitle: english?.subtitle ?? rows[0]?.subtitle ?? (draft.subtitle.trim() || null),
       actionType: draft.actionType,
       actionValue: draft.actionType === "NONE" ? null : draft.actionValue.trim(),
       isActive: draft.isActive,
@@ -101,6 +113,7 @@ export default function BannersPage() {
       startsAt: fromLocalInput(draft.startsAt),
       endsAt: fromLocalInput(draft.endsAt),
     };
+    if (rows.length) body.translations = rows;
     if (imageMediaId) body.imageMediaId = imageMediaId;
     try {
       if (draft.id) await api.patch(`/api/v1/admin/banners/${draft.id}`, body);
@@ -187,8 +200,12 @@ export default function BannersPage() {
               {preview ? <img src={preview} alt="" style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12 }} /> : <p className="muted">لم تُختر صورة.</p>}
               <Button type="button" onClick={() => setPicker(true)} style={{ marginTop: 8 }}>اختيار الصورة</Button>
             </div>
-            <Field label="العنوان"><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field>
-            <Field label="العنوان الفرعي"><input value={draft.subtitle} onChange={(event) => setDraft({ ...draft, subtitle: event.target.value })} /></Field>
+            <LocalizedFields
+              value={draft.copies}
+              onChange={(copies) => setDraft({ ...draft, copies })}
+              primary="Title"
+              secondary="Subtitle"
+            />
             <Field label="الإجراء">
               <select value={draft.actionType} onChange={(event) => setDraft({ ...draft, actionType: event.target.value as BannerAction, actionValue: "" })}>
                 <option value="NONE">بدون إجراء</option>

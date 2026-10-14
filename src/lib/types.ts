@@ -57,11 +57,22 @@ export type MediaItem = {
   createdAt: string;
 };
 
+export type LocaleCode = "ar" | "tr" | "en";
+
+export type TextTranslation = {
+  locale: LocaleCode;
+  name?: string;
+  title?: string;
+  description?: string | null;
+  subtitle?: string | null;
+};
+
 export type Category = {
   id: string;
   name: string;
   slug: string;
   description: string | null;
+  translations?: { locale: LocaleCode; name: string; description: string | null }[];
   sortOrder: number;
   isPublished: boolean;
   cover: ImageRef | null;
@@ -77,6 +88,7 @@ export type Wallpaper = {
   id: string;
   title: string;
   description: string | null;
+  translations?: { locale: LocaleCode; title: string; description: string | null }[];
   slug: string;
   tags: string[];
   orientation: "PORTRAIT" | "LANDSCAPE" | "SQUARE";
@@ -99,6 +111,7 @@ export type Banner = {
   id: string;
   title: string;
   subtitle: string | null;
+  translations?: { locale: LocaleCode; title: string; subtitle: string | null }[];
   actionType: BannerAction;
   actionValue: string | null;
   sortOrder: number;
@@ -122,6 +135,7 @@ export type SectionType =
 export type HomeSection = {
   id: string;
   title: string;
+  translations?: { locale: LocaleCode; title: string }[];
   sectionType: SectionType;
   sortOrder: number;
   isEnabled: boolean;
@@ -142,6 +156,7 @@ export type Announcement = {
   id: string;
   title: string;
   message: string;
+  translations?: { locale: LocaleCode; title: string; message: string }[];
   level: string;
   actionUrl: string | null;
   dismissible: boolean;

@@ -6,7 +6,10 @@ import { fetchAllPages, formatNumber, orientationLabel, splitTags } from "@/lib/
 import { useDebounced } from "@/lib/hooks";
 import type { BulkFileResult, Category, Data, MediaItem, Page, Wallpaper } from "@/lib/types";
 import { useConfirm, useToast } from "@/components/feedback";
+import { LocaleTabs } from "@/components/locale-tabs";
 import { MediaPicker } from "@/components/media-picker";
+import { emptyTranslations, translationsFromRows } from "@/lib/category-form";
+import { LocaleCode, useI18n } from "@/lib/i18n";
 import { Alert, Badge, Button, Empty, Field, Modal, PageHeader, Pagination } from "@/components/ui";
 
 type Editor =
@@ -316,9 +319,12 @@ function EditorModal({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const { t, locale } = useI18n();
   const wallpaper = editor?.mode === "edit" ? editor.wallpaper : null;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [tab, setTab] = useState<LocaleCode>("en");
+  const [copies, setCopies] = useState(emptyTranslations);
   const [slug, setSlug] = useState("");
   const [tags, setTags] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -338,6 +344,8 @@ function EditorModal({
       const item = editor.wallpaper;
       setTitle(item.title);
       setDescription(item.description ?? "");
+      setCopies(translationsFromRows(item.translations));
+      setTab(locale);
       setSlug(item.slug);
       setTags(item.tags.join(", "));
       setCategoryIds(item.categories.map((category) => category.id));
@@ -350,6 +358,8 @@ function EditorModal({
       const name = editor.media.originalFilename.replace(/\.[^.]+$/, "");
       setTitle(name);
       setDescription("");
+      setCopies(emptyTranslations());
+      setTab(locale);
       setSlug("");
       setTags("");
       setCategoryIds([]);
@@ -361,26 +371,34 @@ function EditorModal({
     }
     setDeleteMedia(false);
     setError(null);
-  }, [editor]);
+  }, [editor, locale]);
 
   async function save(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    const rows = (["ar", "tr", "en"] as const).flatMap((code) => {
+      const name = copies[code].name.trim();
+      if (!name) return [];
+      return [{ locale: code, title: name, description: copies[code].description.trim() || null }];
+    });
+    const english = rows.find((row) => row.locale === "en");
     const body: Record<string, unknown> = {
-      title: title.trim(),
+      title: english?.title || rows[0]?.title || title.trim(),
       mediaId,
       categoryIds,
       tags: splitTags(tags),
       isPublished,
       isFeatured,
     };
+    if (rows.length) body.translations = rows;
     if (slug.trim()) body.slug = slug.trim();
+    const descriptionValue = english?.description ?? rows[0]?.description ?? (description.trim() || null);
     if (wallpaper) {
-      body.description = description.trim() || null;
+      body.description = descriptionValue;
       body.sortOrder = Number(sortOrder) || 0;
-    } else if (description.trim()) {
-      body.description = description.trim();
+    } else if (descriptionValue) {
+      body.description = descriptionValue;
     }
     try {
       if (wallpaper) await api.patch(`/api/v1/admin/wallpapers/${wallpaper.id}`, body);
@@ -418,8 +436,13 @@ function EditorModal({
             ) : null}
           </div>
           <div className="form-grid">
-            <Field label="العنوان" className="full"><input required value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
-            <Field label="الوصف" className="full"><textarea value={description} onChange={(event) => setDescription(event.target.value)} /></Field>
+            <Field label={t("wallpaper.fieldTitle")} className="full">
+              <LocaleTabs value={tab} onChange={setTab} />
+              <input value={copies[tab].name} onChange={(event) => setCopies({ ...copies, [tab]: { ...copies[tab], name: event.target.value } })} />
+            </Field>
+            <Field label={t("wallpaper.description")} className="full">
+              <textarea value={copies[tab].description} onChange={(event) => setCopies({ ...copies, [tab]: { ...copies[tab], description: event.target.value } })} />
+            </Field>
             <Field label="المسار" hint="يُولَّد من العنوان إذا تُرك فارغاً عند الإنشاء"><input value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>
             <Field label="الترتيب"><input type="number" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></Field>
             <Field label="الوسوم" className="full" hint="افصل بينها بفاصلة"><input value={tags} onChange={(event) => setTags(event.target.value)} /></Field>

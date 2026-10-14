@@ -383,10 +383,11 @@ th { color: var(--faint); font-weight: 500; font-size: 12px; }
     inset-inline-start: 0;
     width: min(300px, 88vw);
     height: 100vh;
-    transform: translateX(110%);
+    transform: translateX(-110%);
     transition: transform 0.2s ease;
     background: #16130f;
   }
+  html[dir="rtl"] .side { transform: translateX(110%); }
   .side.open { transform: none; }
   .scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 25; border: 0; }
   .content { padding: 18px 14px 96px; }
@@ -396,3 +397,15 @@ th { color: var(--faint); font-weight: 500; font-size: 12px; }
 @media (max-width: 560px) {
   .stats, .recent, .form-grid { grid-template-columns: 1fr; }
 }
+
+.locale-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.locale-tabs button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+.locale-tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.lang-switch { display: grid; gap: 4px; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+.lang-switch select { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }

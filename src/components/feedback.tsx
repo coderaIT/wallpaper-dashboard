@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 type ToastTone = "ok" | "err";
 type ToastValue = { push: (message: string, tone?: ToastTone) => void };
@@ -31,12 +32,13 @@ export function useToast() {
   return ctx;
 }
 
-type ConfirmOptions = { title: string; body: string; confirmText?: string; danger?: boolean };
+type ConfirmOptions = { title: string; body: string; confirmText?: string; cancelText?: string; danger?: boolean; extra?: React.ReactNode };
 type ConfirmValue = { ask: (options: ConfirmOptions) => Promise<boolean> };
 
 const ConfirmContext = createContext<ConfirmValue | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolver = useRef<((value: boolean) => void) | null>(null);
 
@@ -63,10 +65,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               <h2>{options.title}</h2>
             </header>
             <p className="muted" style={{ marginTop: 0 }}>{options.body}</p>
+            {options.extra}
             <div className="page-actions" style={{ justifyContent: "flex-end" }}>
-              <button type="button" className="btn" onClick={() => close(false)}>تراجع</button>
+              <button type="button" className="btn" onClick={() => close(false)}>{options.cancelText ?? t("common.cancel")}</button>
               <button type="button" className={`btn ${options.danger ? "danger" : "primary"}`} onClick={() => close(true)}>
-                {options.confirmText ?? "تأكيد"}
+                {options.confirmText ?? t("common.confirm")}
               </button>
             </div>
           </div>

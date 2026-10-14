@@ -7,6 +7,8 @@ import { formatDate, fromLocalInput, toLocalInput } from "@/lib/format";
 import type { Announcement, Data, ExtraLink, PlatformUpdate, SettingsDoc } from "@/lib/types";
 import { useToast } from "@/components/feedback";
 import { Alert, Button, Field, PageHeader } from "@/components/ui";
+import { LocalizedFields } from "@/components/locale-tabs";
+import { translationsFromRows } from "@/lib/category-form";
 
 type FlagRow = { key: string; value: string };
 type LinkRow = { label: string; url: string };
@@ -185,6 +187,27 @@ export default function SettingsPage() {
                   <Field label="العنوان"><input value={item.title} onChange={(event) => updateAnnouncement(index, { title: event.target.value })} /></Field>
                   <Field label="رابط الإجراء"><input value={item.actionUrl ?? ""} onChange={(event) => updateAnnouncement(index, { actionUrl: emptyToNull(event.target.value) })} /></Field>
                   <Field label="الرسالة" className="full"><textarea value={item.message} onChange={(event) => updateAnnouncement(index, { message: event.target.value })} /></Field>
+                  <div className="full">
+                    <LocalizedFields
+                      value={translationsFromRows(
+                        item.translations?.map((row) => ({
+                          locale: row.locale,
+                          title: row.title,
+                          description: row.message,
+                        })),
+                      )}
+                      onChange={(copies) => {
+                        const translations = (["ar", "tr", "en"] as const).flatMap((locale) => {
+                          const title = copies[locale].name.trim();
+                          if (!title) return [];
+                          return [{ locale, title, message: copies[locale].description.trim() || item.message }];
+                        });
+                        updateAnnouncement(index, { translations });
+                      }}
+                      primary="Title"
+                      secondary="Message"
+                    />
+                  </div>
                   <label className="toggle"><input type="checkbox" checked={item.isActive} onChange={(event) => updateAnnouncement(index, { isActive: event.target.checked })} /> نشط</label>
                   <label className="toggle"><input type="checkbox" checked={item.dismissible} onChange={(event) => updateAnnouncement(index, { dismissible: event.target.checked })} /> قابل للإغلاق</label>
                   <Button type="button" variant="danger" className="small" onClick={() => setAnnouncements((current) => current.filter((_, itemIndex) => itemIndex !== index))}>حذف الإعلان</Button>

@@ -7,10 +7,14 @@ import type { Category, HomeSection, Page, SectionType, Wallpaper } from "@/lib/
 import { SECTION_TYPES } from "@/lib/types";
 import { useConfirm, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Empty, Field, Modal, PageHeader } from "@/components/ui";
+import { LocalizedFields } from "@/components/locale-tabs";
+import { emptyTranslations, translationsFromRows } from "@/lib/category-form";
+import type { LocaleCode } from "@/lib/i18n";
 
 type FormState = {
   id?: string;
   title: string;
+  copies: Record<LocaleCode, { name: string; description: string }>;
   sectionType: SectionType;
   isEnabled: boolean;
   limit: string;
@@ -23,6 +27,7 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   title: "",
+  copies: emptyTranslations(),
   sectionType: "LATEST_WALLPAPERS",
   isEnabled: true,
   limit: "10",
@@ -38,6 +43,7 @@ function fromSection(section: HomeSection): FormState {
   return {
     id: section.id,
     title: section.title,
+    copies: translationsFromRows(section.translations),
     sectionType: section.sectionType,
     isEnabled: section.isEnabled,
     limit: config.limit != null ? String(config.limit) : "10",
@@ -106,19 +112,29 @@ export default function HomeSectionsPage() {
     }
     setBusy(true);
     const configuration = buildConfig(form);
+    const rows = (["ar", "tr", "en"] as const).flatMap((locale) => {
+      const title = form.copies[locale].name.trim();
+      if (!title) return [];
+      return [{ locale, title }];
+    });
+    const english = rows.find((row) => row.locale === "en");
+    const title = english?.title || rows[0]?.title || form.title.trim();
+    const translations = rows.length ? rows : undefined;
     try {
       if (form.id) {
         await api.patch(`/api/v1/admin/home-sections/${form.id}`, {
-          title: form.title.trim(),
+          title,
           sectionType: form.sectionType,
           isEnabled: form.isEnabled,
           configuration,
+          ...(translations ? { translations } : {}),
         });
       } else {
         await api.post("/api/v1/admin/home-sections", {
-          title: form.title.trim(),
+          title,
           sectionType: form.sectionType,
           configuration,
+          ...(translations ? { translations } : {}),
         });
       }
       setForm(null);
@@ -200,7 +216,11 @@ export default function HomeSectionsPage() {
         {form ? (
           <form className="stack" onSubmit={save}>
             <div className="form-grid">
-              <Field label="العنوان"><input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
+              <LocalizedFields
+                value={form.copies}
+                onChange={(copies) => setForm({ ...form, copies })}
+                primary="Title"
+              />
               <Field label="النوع">
                 <select value={form.sectionType} onChange={(event) => setForm({ ...form, sectionType: event.target.value as SectionType })}>
                   {SECTION_TYPES.map((type) => <option key={type} value={type}>{sectionLabel(type)}</option>)}
