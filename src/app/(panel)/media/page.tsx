@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText, qs } from "@/lib/api";
+import { uploadFilesInBatches } from "@/lib/upload-batches";
 import { formatBytes, formatNumber } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
-import type { Data, MediaItem, Page } from "@/lib/types";
+import type { BulkFileResult, Data, MediaItem, Page } from "@/lib/types";
 import { useConfirm, useToast } from "@/components/feedback";
 import { Alert, Badge, Button, Empty, PageHeader, Pagination } from "@/components/ui";
 
@@ -31,6 +32,7 @@ export default function MediaPage() {
   const [error, setError] = useState<string | null>(null);
   const [cleanup, setCleanup] = useState<Cleanup | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -48,25 +50,34 @@ export default function MediaPage() {
   useEffect(() => { void load(); }, [load]);
 
   async function upload(files: File[]) {
-    if (files.length === 0) return;
+    if (files.length === 0 || busy) return;
     setBusy(true);
+    setProgress({ done: 0, total: files.length });
     try {
-      if (files.length === 1) {
-        const form = new FormData();
-        form.set("file", files[0]);
-        await api.upload("/api/v1/admin/media", form);
-        toast.push("تم رفع الصورة");
-      } else {
-        const form = new FormData();
-        files.forEach((file) => form.append("files", file));
-        const res = await api.upload<Data<{ succeeded: number; failed: number }>>("/api/v1/admin/media/bulk", form);
-        toast.push(`نجح ${res.data.succeeded} وفشل ${res.data.failed}`);
-      }
+      const summary = await uploadFilesInBatches({
+        files,
+        messageOf: errorText,
+        onProgress: (done, total) => setProgress({ done, total }),
+        upload: async (batch) => {
+          if (batch.length === 1) {
+            const form = new FormData();
+            form.set("file", batch[0]);
+            await api.upload("/api/v1/admin/media", form);
+            return { succeeded: 1, failed: 0, results: [{ index: 0, filename: batch[0].name, status: "success" as const }] };
+          }
+          const form = new FormData();
+          batch.forEach((file) => form.append("files", file));
+          const res = await api.upload<Data<BulkFileResult<MediaItem>>>("/api/v1/admin/media/bulk", form);
+          return res.data;
+        },
+      });
+      toast.push(summary.failed === 0 ? `تم رفع ${summary.succeeded} صورة` : `نجح ${summary.succeeded} وفشل ${summary.failed}`, summary.failed === 0 ? undefined : "err");
       await load();
     } catch (err) {
       toast.push(errorText(err), "err");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -104,7 +115,7 @@ export default function MediaPage() {
     <div>
       <PageHeader title="الوسائط" hint="الصور الأصلية مع المعاينة والمصغّر.">
         <label className={`btn primary ${busy ? "" : ""}`}>
-          {busy ? "جاري الرفع…" : "رفع صور"}
+          {busy ? `جاري الرفع… ${progress?.done ?? 0} / ${progress?.total ?? 0}` : "رفع صور"}
           <input hidden type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void upload(files); }} />
         </label>
       </PageHeader>

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, errorText, qs } from "@/lib/api";
+import { uploadFilesInBatches } from "@/lib/upload-batches";
 import { fetchAllPages, formatNumber, orientationLabel, splitTags } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import type { BulkFileResult, Category, Data, MediaItem, Page, Wallpaper } from "@/lib/types";
@@ -237,29 +238,41 @@ function UploadModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<BulkFileResult<Wallpaper> | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!open) {
       setFiles([]);
       setResults(null);
       setError(null);
+      setProgress(null);
     }
   }, [open]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (files.length === 0) return;
+    if (files.length === 0 || busy) return;
     setBusy(true);
     setError(null);
+    setResults(null);
+    setProgress({ done: 0, total: files.length });
     try {
-      const form = new FormData();
-      files.forEach((file) => form.append("files", file));
-      if (categoryIds.length) form.set("categoryIds", categoryIds.join(","));
-      form.set("isPublished", String(isPublished));
-      form.set("isFeatured", String(isFeatured));
-      const res = await api.upload<Data<BulkFileResult<Wallpaper>>>("/api/v1/admin/wallpapers/upload", form);
-      setResults(res.data);
-      if (res.data.failed === 0) await onDone(`رُفعت ${res.data.succeeded} خلفية`);
+      const summary = await uploadFilesInBatches({
+        files,
+        messageOf: errorText,
+        onProgress: (done, total) => setProgress({ done, total }),
+        upload: async (batch) => {
+          const form = new FormData();
+          batch.forEach((file) => form.append("files", file));
+          if (categoryIds.length) form.set("categoryIds", categoryIds.join(","));
+          form.set("isPublished", String(isPublished));
+          form.set("isFeatured", String(isFeatured));
+          const res = await api.upload<Data<BulkFileResult<Wallpaper>>>("/api/v1/admin/wallpapers/upload", form);
+          return res.data;
+        },
+      });
+      setResults(summary);
+      if (summary.failed === 0) await onDone(`رُفعت ${summary.succeeded} خلفية`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -271,10 +284,10 @@ function UploadModal({
     <Modal open={open} title="رفع خلفيات" onClose={onClose} wide>
       <form className="stack" onSubmit={submit}>
         {error ? <Alert>{error}</Alert> : null}
-        <Field label="الصور" hint="JPEG أو PNG أو WebP. العنوان يُؤخذ من اسم الملف.">
-          <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+        <Field label="الصور" hint="JPEG أو PNG أو WebP. يمكنك اختيار أكثر من 50 صورة دفعة واحدة؛ تُرفع على مجموعات. العنوان يُؤخذ من اسم الملف.">
+          <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
         </Field>
-        {files.length > 0 ? <p className="muted">{files.length} ملفات</p> : null}
+        {files.length > 0 ? <p className="muted">{files.length} ملفات{progress ? ` · رُفع ${progress.done} من ${progress.total}` : ""}</p> : null}
         <Field label="التصنيفات">
           <div className="check-list">
             {categories.map((category) => (
@@ -291,7 +304,7 @@ function UploadModal({
         </Field>
         <label className="toggle"><input type="checkbox" checked={isPublished} onChange={(event) => setIsPublished(event.target.checked)} /> نشر مباشرة</label>
         <label className="toggle"><input type="checkbox" checked={isFeatured} onChange={(event) => setIsFeatured(event.target.checked)} /> تمييز</label>
-        <Button type="submit" variant="primary" disabled={busy || files.length === 0}>{busy ? "جاري الرفع…" : "رفع وإنشاء"}</Button>
+        <Button type="submit" variant="primary" disabled={busy || files.length === 0}>{busy ? `جاري الرفع… ${progress?.done ?? 0} / ${progress?.total ?? files.length}` : "رفع وإنشاء"}</Button>
         {results ? (
           <div className="stack">
             <p>نجح {results.succeeded} · فشل {results.failed}</p>

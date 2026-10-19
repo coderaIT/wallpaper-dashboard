@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "src/lib/category-form.test.ts"
+    "src/lib/category-form.test.ts",
+    "src/lib/upload-batches.test.ts"
   ]
 }
